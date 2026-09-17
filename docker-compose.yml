@@ -1,0 +1,23 @@
+services:
+  verifier:
+    build: .
+    image: selective-disclosure-verifier:1.0
+    container_name: sdv-verifier
+    ports:
+      - "8000:8000"
+    volumes:
+      - sdv-data:/data
+    environment:
+      # SQLite 数据库文件位置（容器内）
+      SDV_DB_PATH: /data/verifier.db
+      # 首次启动写入演示密钥 k1 与模板 tpl_demo（"1" 开启，"0" 关闭）
+      SDV_SEED: "1"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  sdv-data:

@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.pyc
+
+# 本地 SQLite 数据
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# 虚拟环境
+.venv/

@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>选择性披露凭证验证台</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1>🔏 选择性披露凭证验证台</h1>
+  <p class="subtitle">Ed25519 签名 · 字段级 Merkle 承诺 · 密钥轮换 · 版本化撤销 · 幂等审计链</p>
+</header>
+
+<nav class="tabs">
+  <button class="tab active" data-tab="admin">① 管理员</button>
+  <button class="tab" data-tab="issue">② 签发端</button>
+  <button class="tab" data-tab="wallet">③ 持有者钱包</button>
+  <button class="tab" data-tab="verify">④ 验证端</button>
+  <button class="tab" data-tab="audits">⑤ 审计链</button>
+  <button class="tab" data-tab="offline">⑥ 离线验证</button>
+</nav>
+
+<main>
+  <!-- 管理员 -->
+  <section id="tab-admin" class="panel active">
+    <h2>签名密钥（Ed25519）</h2>
+    <div class="row">
+      <button id="btn-rotate">轮换生成新密钥</button>
+      <span id="active-key" class="muted"></span>
+    </div>
+    <table id="keys-table"><thead><tr><th>KID</th><th>创建时间 (UTC)</th><th>状态</th></tr></thead><tbody></tbody></table>
+
+    <h2>凭证模板（类型与必填约束）</h2>
+    <div class="card">
+      <h3>新建模板</h3>
+      <div class="row">
+        <input id="tpl-id" placeholder="模板 ID，如 tpl_student">
+        <input id="tpl-name" placeholder="模板名称，如 学生凭证">
+      </div>
+      <table id="tpl-fields-edit"><thead><tr><th>字段名</th><th>类型</th><th>必填</th><th></th></tr></thead><tbody></tbody></table>
+      <div class="row">
+        <button id="btn-add-field">+ 增加字段</button>
+        <button id="btn-create-tpl" class="primary">创建模板 (v1)</button>
+      </div>
+      <p class="hint">类型：string / integer / number / boolean / date(YYYY-MM-DD)</p>
+    </div>
+
+    <h3>已有模板与版本</h3>
+    <div id="templates-list"></div>
+
+    <h2>撤销管理</h2>
+    <div class="row">
+      <input id="revoke-cred-id" placeholder="凭证 ID，如 cred_...">
+      <input id="revoke-reason" placeholder="撤销原因（可选）">
+      <button id="btn-revoke">按当前版本撤销</button>
+      <button id="btn-refresh-revocations">刷新撤销列表</button>
+    </div>
+    <table id="revocations-table"><thead><tr><th>模板</th><th>生效版本</th><th>凭证 ID</th><th>原因</th><th>时间</th></tr></thead><tbody></tbody></table>
+  </section>
+
+  <!-- 签发端 -->
+  <section id="tab-issue" class="panel">
+    <h2>签发凭证</h2>
+    <div class="row">
+      <label>模板：<select id="issue-tpl"></select></label>
+      <label>有效期：<input id="issue-days" type="number" value="365" min="1" style="width:90px"> 天</label>
+    </div>
+    <div id="issue-form"></div>
+    <div class="row">
+      <button id="btn-issue" class="primary">签发凭证（逐字段 Merkle 承诺 + Ed25519 签名）</button>
+    </div>
+    <div id="issue-result"></div>
+
+    <h3>已签发凭证</h3>
+    <table id="creds-table"><thead><tr><th>凭证 ID</th><th>模板/版本</th><th>签名密钥</th><th>状态</th><th>签发时间</th><th></th></tr></thead><tbody></tbody></table>
+  </section>
+
+  <!-- 钱包 -->
+  <section id="tab-wallet" class="panel">
+    <h2>持有者钱包 — 选择性披露</h2>
+    <p class="muted">从已签发凭证中选择要披露的字段。未勾选字段只以 Merkle 承诺形式存在，验证端看不到值与字段名。</p>
+    <div class="row">
+      <label>选择凭证：<select id="wallet-cred"></select></label>
+      <button id="btn-load-cred">载入</button>
+      <input id="wallet-import-file" type="file" accept="application/json" style="display:none">
+      <button id="btn-import-cred">导入凭证信封 JSON</button>
+    </div>
+    <div id="wallet-fields"></div>
+    <div class="row">
+      <button id="btn-build-presentation" class="primary">生成披露 Presentation</button>
+    </div>
+    <div id="wallet-result"></div>
+  </section>
+
+  <!-- 验证端 -->
+  <section id="tab-verify" class="panel">
+    <h2>验证 Presentation</h2>
+    <div class="row">
+      <label>幂等键 Idempotency-Key：
+        <input id="idem-key" style="width:320px">
+      </label>
+      <button id="btn-gen-idem">生成 UUID</button>
+      <label><input type="checkbox" id="same-key-concurrency"> 并发 5 次同键压测</label>
+    </div>
+    <textarea id="verify-input" class="jsonbox" placeholder="粘贴持有者生成的 presentation JSON"></textarea>
+    <div class="row">
+      <button id="btn-verify" class="primary">提交验证（只写一条审计）</button>
+      <button id="btn-replay">用同键重放（应命中幂等）</button>
+    </div>
+    <div id="verify-result"></div>
+  </section>
+
+  <!-- 审计链 -->
+  <section id="tab-audits" class="panel">
+    <h2>可校验审计链</h2>
+    <div class="row">
+      <button id="btn-refresh-chain">刷新并重放校验哈希链</button>
+      <span id="chain-status"></span>
+    </div>
+    <table id="chain-table"><thead><tr><th>#</th><th>时间 (UTC)</th><th>幂等键</th><th>凭证</th><th>结果</th><th>重复</th><th>链接</th><th>chain_hash</th></tr></thead><tbody></tbody></table>
+  </section>
+
+  <!-- 离线 -->
+  <section id="tab-offline" class="panel">
+    <h2>离线验证说明</h2>
+    <div class="card">
+      <p>凭证信封（credential envelope）是自包含的：包含签名头部、字段承诺明文与盐、模板版本定义，可导出离线保存。</p>
+      <ol>
+        <li>在「② 签发端」签发后复制 <b>credential JSON</b>，保存为 <code>credential.json</code>。</li>
+        <li>用管理员接口 <code>GET /api/keys/{kid}</code> 取签发公钥，保存为 <code>key.pem</code>（密钥轮换后历史公钥仍可获取）。</li>
+        <li>生成只含指定字段的 presentation：
+          <pre>python offline_verify.py disclose credential.json --fields full_name,age -o presentation.json</pre>
+        </li>
+        <li>离线验证（无需服务端；跳过在线撤销检查）：
+          <pre>python offline_verify.py verify presentation.json --public-key key.pem</pre>
+        </li>
+      </ol>
+    </div>
+  </section>
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
