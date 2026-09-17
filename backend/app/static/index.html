@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>选择性披露凭证验证台</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <h1>选择性披露凭证验证台</h1>
+    <p class="subtitle">Ed25519 签名 · 字段级 Merkle 承诺 · 密钥轮换 · 按版本撤销 · 幂等审计链</p>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="admin">管理台</button>
+    <button class="tab" data-tab="issuer">签发端</button>
+    <button class="tab" data-tab="holder">持有者</button>
+    <button class="tab" data-tab="verifier">验证台</button>
+  </nav>
+
+  <main>
+    <!-- ================= 管理台 ================= -->
+    <section id="tab-admin" class="panel active">
+      <div class="card">
+        <h2>凭证模板（带类型与必填约束）</h2>
+        <div class="row">
+          <label>模板名称 <input id="tpl-name" placeholder="如 university_degree"></label>
+        </div>
+        <table class="grid" id="tpl-fields">
+          <thead>
+            <tr><th>字段名</th><th>类型</th><th>必填</th><th>枚举值（逗号分隔）</th><th></th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <div class="row">
+          <button id="btn-add-field" class="secondary">+ 添加字段</button>
+          <button id="btn-create-tpl">创建模板新版本</button>
+        </div>
+        <p class="hint">同名模板重复创建时版本号自动递增；旧版本仍可验证历史凭证。</p>
+      </div>
+
+      <div class="card">
+        <h2>模板列表</h2>
+        <table class="grid" id="tpl-list">
+          <thead><tr><th>名称</th><th>版本</th><th>字段</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h2>Ed25519 签名密钥</h2>
+        <button id="btn-rotate">轮换密钥</button>
+        <p class="hint">轮换后旧密钥转为 retired，仅用于验证历史凭证，不再签发。</p>
+        <table class="grid" id="key-list">
+          <thead><tr><th>KID</th><th>公钥（hex）</th><th>状态</th><th>创建时间</th><th>退役时间</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h2>撤销列表（按模板版本生效）</h2>
+        <div class="row wrap">
+          <label>模板 <select id="rev-tpl"></select></label>
+          <label>凭证 ID <input id="rev-cred" placeholder="cred-… 或 * 表示该版本全部"></label>
+          <label>原因 <input id="rev-reason" placeholder="可选"></label>
+          <button id="btn-revoke">加入撤销列表</button>
+        </div>
+        <table class="grid" id="rev-list">
+          <thead><tr><th>模板</th><th>版本</th><th>凭证 ID</th><th>原因</th><th>撤销时间</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================= 签发端 ================= -->
+    <section id="tab-issuer" class="panel">
+      <div class="card">
+        <h2>签发凭证</h2>
+        <div class="row wrap">
+          <label>模板 <select id="issue-tpl"></select></label>
+          <label>持有者（subject） <input id="issue-subject" placeholder="如 alice@example.com"></label>
+          <label>有效期（天） <input id="issue-days" type="number" value="365" min="1"></label>
+        </div>
+        <div id="issue-fields"></div>
+        <div class="row"><button id="btn-issue">签发凭证</button></div>
+      </div>
+      <div class="card" id="issue-result-card" hidden>
+        <h2>已签发凭证（含字段盐值，交给持有者保管）</h2>
+        <div class="row">
+          <button id="btn-to-holder" class="secondary">送到持有者页 →</button>
+        </div>
+        <pre id="issue-result"></pre>
+      </div>
+      <div class="card">
+        <h2>已签发凭证列表</h2>
+        <table class="grid" id="cred-list">
+          <thead><tr><th>凭证 ID</th><th>模板</th><th>版本</th><th>持有者</th><th>签发时间</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ================= 持有者 ================= -->
+    <section id="tab-holder" class="panel">
+      <div class="card">
+        <h2>选择性披露</h2>
+        <div class="row wrap">
+          <label>凭证 ID <input id="holder-cred-id" placeholder="cred-…"></label>
+          <button id="btn-load-cred" class="secondary">加载凭证</button>
+        </div>
+        <div id="holder-fields"></div>
+        <div class="row"><button id="btn-present" disabled>生成披露 Presentation</button></div>
+        <p class="hint">只勾选愿意披露的字段；presentation 仅包含这些字段的明文、盐与 Merkle 证明路径。</p>
+      </div>
+      <div class="card" id="presentation-card" hidden>
+        <h2>Presentation（可离线验证）</h2>
+        <div class="row">
+          <button id="btn-to-verifier" class="secondary">送到验证台 →</button>
+          <button id="btn-download-presentation" class="secondary">下载 JSON（供离线验证脚本使用）</button>
+        </div>
+        <pre id="presentation-output"></pre>
+      </div>
+    </section>
+
+    <!-- ================= 验证台 ================= -->
+    <section id="tab-verifier" class="panel">
+      <div class="card">
+        <h2>验证 Presentation</h2>
+        <label>Presentation JSON</label>
+        <textarea id="verify-input" rows="10" spellcheck="false"
+                  placeholder='{"header": …, "signature": …, "disclosed_fields": […]}'></textarea>
+        <div class="row wrap">
+          <label>幂等键 <input id="idem-key" size="36"></label>
+          <button id="btn-new-key" class="secondary">重新生成</button>
+          <button id="btn-verify">验证</button>
+          <button id="btn-verify-x5" class="secondary" title="用同一幂等键并发提交 5 次">并发提交 ×5</button>
+        </div>
+        <p class="hint">同一幂等键重复或并发提交，只写入一条审计记录并返回既有结果。</p>
+      </div>
+
+      <div class="card" id="verify-result-card" hidden>
+        <h2>验证结果</h2>
+        <div id="verify-badge"></div>
+        <p id="verify-meta"></p>
+        <table class="grid" id="verify-checks">
+          <thead><tr><th>检查项</th><th>结果</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <h3>已披露字段</h3>
+        <table class="grid" id="verify-disclosed">
+          <thead><tr><th>字段</th><th>值</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div id="verify-failures"></div>
+      </div>
+
+      <div class="card">
+        <h2>审计链</h2>
+        <div class="row">
+          <button id="btn-refresh-audits" class="secondary">刷新</button>
+          <button id="btn-verify-chain" class="secondary">校验审计链</button>
+          <span id="chain-result"></span>
+        </div>
+        <table class="grid" id="audit-list">
+          <thead><tr><th>#</th><th>时间</th><th>凭证</th><th>结果</th><th>幂等键</th><th>prev_hash</th><th>hash</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

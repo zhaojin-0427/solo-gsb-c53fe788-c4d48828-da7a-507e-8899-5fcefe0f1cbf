@@ -1,0 +1,16 @@
+services:
+  sdc-verifier:
+    build: ./backend
+    container_name: sdc-verifier
+    ports:
+      - "8000:8000"
+    environment:
+      # SQLite 数据库路径（容器内）
+      - DB_PATH=/data/app.db
+    volumes:
+      # 持久化密钥、模板、凭证与审计链
+      - sdc-data:/data
+    restart: unless-stopped
+
+volumes:
+  sdc-data:
